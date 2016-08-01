@@ -1,21 +1,25 @@
 import datetime
 import pika
 import warnings
+import traceback
 
 from Queue import Queue
 
 __all__ = ['Pika']
 
-class Pika(object):
 
-    def __init__(self, app = None):
+class Fpika(object):
+
+    def __init__(self, app=None, Logger=None):
         """
             Create the Flask Pika extension.
         """
         self.app = app
         if app is not None:
-            self.init_app(app)
 
+            self.init_app(app)
+        if Logger:
+            self.logger = Logger
 
     def init_app(self, app):
         """
@@ -23,21 +27,27 @@ class Pika(object):
         """
         pika_params = app.config['FLASK_PIKA_PARAMS']
         pool_params = app.config['FLASK_PIKA_POOL_PARAMS']
+        pika_failover_params = app.config['FLASK_PIKA_FAILOVER_PARAMS']
 
         self.debug = app.debug
-        self.logger = app.logger
+        if not self.logger:
+            self.logger = app.logger
         self.pool_size = 1
         self.pool_recycle = -1
         self.pool_queue = Queue()
         self.channel_recycle_times = {}
+        self.channel_broken_times = []
+        self.tolerance = app.config['FLASK_PIKA_TOLERANCE'][0]
+        self.tolerance_interval = app.config['FLASK_PIKA_TOLERANCE'][1]
 
         # fix create credentials if needed
         if 'credentials' not in pika_params:
-            pika_params['credentials'] = pika.PlainCredentials(pika_params['username'], pika_params['password'])
-            del pika_params['username']
-            del pika_params['password']
+            pika_params = self.__create_creds(pika_params)
+        if 'credentials' not in pika_failover_params:
+            pika_failover_params = self.__create_creds(pika_failover_params)
 
         self._pika_connection_params = pika.ConnectionParameters(**pika_params)
+        self._pika_failover_connection_params = pika.ConnectionParameters(**pika_failover_params)
         self.__DEBUG("Connection params are %s" % self._pika_connection_params)
 
         # setup pooling if requested
@@ -50,6 +60,14 @@ class Pika(object):
                 self.pool_queue.put(channel)
             self.__DEBUG("Pool params are %s" % pool_params)
 
+    def create_creds(self, params):
+        """ Create Credentials and remove username and password fields. """
+        usr = params['username']
+        pas = params['password']
+        del params['username']
+        del params['password']
+        params['credentials'] = pika.PlainCredentials(usr, pas)
+        return params
 
     def __create_channel(self):
         """
@@ -60,7 +78,6 @@ class Pika(object):
         self.__DEBUG("Created AMQP Connection and Channel %s" % channel)
         self.__set_recycle_for_channel(channel)
         return channel
-
 
     def __destroy_channel(self, channel):
         """
@@ -73,7 +90,6 @@ class Pika(object):
         except Exception, e:
             self.__WARN("Failed to destroy channel cleanly %s" % e)
 
-
     def __set_recycle_for_channel(self, channel, recycle_time = None):
         """
             Set the next recycle time for a channel
@@ -83,8 +99,6 @@ class Pika(object):
 
         self.channel_recycle_times[hash(channel)] = recycle_time
 
-
-
     def __remove_recycle_time_for_channel(self, channel):
         """
             Remove the recycle time for a given channel if it exists
@@ -93,14 +107,12 @@ class Pika(object):
         if channel_hash in self.channel_recycle_times:
             del self.channel_recycle_times[channel_hash]
 
-
     def __should_recycle_channel(self, channel):
         """
             Determine if a channel should be recycled based on it's recycle time
         """
         recycle_time = self.channel_recycle_times[hash(channel)]
         return recycle_time < unix_time_millis_now()
-
 
     def channel(self):
         """
@@ -137,7 +149,6 @@ class Pika(object):
 
         return ch
 
-
     def return_channel(self, channel):
         """
             Return a channel
@@ -153,10 +164,9 @@ class Pika(object):
             else:
                 self.return_broken_channel(channel)
 
-        #if not using pooling then just destroy the channel
+        # if not using pooling then just destroy the channel
         else:
             self.__destroy_channel(channel)
-
 
     def return_broken_channel(self, channel):
         """
@@ -167,13 +177,55 @@ class Pika(object):
         # if using pooling
         if self.pool_recycle > -1:
             self.__WARN("Pika channel returned in broken state, replacing %s" % channel)
+            self.channel_broken_times.append(unix_time_millis_now()/1000)
             self.__destroy_channel(channel)
+            self.__WARN("FlaskPika: Checking failing Tolerance")
+            if self.check_tolerance():
+                self._fail_over("failover")
             self.pool_queue.put(self.__create_channel())
 
-        #if not using pooling then just destroy the channel
+        # if not using pooling then just destroy the channel
         else:
             self.__WARN("Pika channel returned in broken state %s" % channel)
             self.__destroy_channel(channel)
+            if self.check_tolerance():
+                self._fail_over("failover")
+
+    def check_tolerance(self):
+        # self.channel_broken_times = sorted(self.channel_broken_times, reverse=True)
+        del self.channel_broken_times[-(self.tolerance):]
+        # self.__WARN("FlaskPika: check_tolerance(): {cbt}".format(cbt=str(self.channel_broken_times)))
+        evaluation = (unix_time_millis_now() / 1000) - self.tolerance_interval
+        # self.__WARN("FlaskPika: check_tolerance(): evaluation is {e:.2f}".format(e=evaluation))
+        check = 0
+        for item in self.channel_broken_times:
+            # self.__WARN("if {item:.2f} > {e:.2f}".format(item=item, e=evaluation))
+            if item > evaluation:
+                self.__WARN("CHECK")
+                check += 1
+        if check >= self.tolerance:
+            return True
+        else:
+            return False
+
+    def _fail_over(self, reason):
+        try:
+            if reason == "failover":
+                self.__WARN("Pika Failed over to backup host.")
+            else:
+                self.__WARN("Pika Failed over to backup host, due to {r}.".format(r=reason))
+
+            self.__WARN("Pika Connection Current is {cur}".format(cur=str(self._pika_connection_params)))
+            tmp = self._pika_connection_params
+            self._pika_connection_params = self._pika_failover_connection_params
+            self._pika_failover_connection_params = tmp
+            self.__WARN("Pika Connection Failed Over to is {cur}".format(cur=str(self._pika_connection_params)))
+
+            return "Successfully Failed Over"
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.__WARN("Pika Failover Failed. Error: {e}, tb: {tb}".format(e=e,tb=tb))
+            return "Failed to Fail Over, error: {e}".format(e=e)
 
     def __DEBUG(self, msg):
         """
