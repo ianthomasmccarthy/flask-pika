@@ -24,7 +24,7 @@ Add the Flask Pika Params to your app config and then initialize the Flask Pika 
 
     ##app.py
     from flask import Flask
-	from flask.ext.pika import Pika as FPika
+	from flask_pika import Pika as FPika
 
     app = Flask(__name__)
 	fpika = FPika(app)
