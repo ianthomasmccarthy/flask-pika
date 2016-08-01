@@ -1,6 +1,6 @@
 import datetime
 import pika
-import warnings
+# import warnings
 import traceback
 
 from Queue import Queue
@@ -25,24 +25,25 @@ class Fpika(object):
         """
             Initialize the Flask Pika extension
         """
-        pika_params = app.config['FLASK_PIKA_PARAMS']
-        pool_params = app.config['FLASK_PIKA_POOL_PARAMS']
-        pika_failover_params = app.config['FLASK_PIKA_FAILOVER_PARAMS']
+        pika_params                = app.config['FLASK_PIKA_PARAMS']
+        pool_params                = app.config['FLASK_PIKA_POOL_PARAMS']
+        pika_failover_params       = app.config['FLASK_PIKA_FAILOVER_PARAMS']
 
-        self.debug = app.debug
+        self.debug                 = app.debug
         if not self.logger:
-            self.logger = app.logger
-        self.pool_size = 1
-        self.pool_recycle = -1
-        self.pool_queue = Queue()
+            self.logger            = app.logger
+        self.pool_size             = 1
+        self.pool_recycle          = -1
+        self.pool_queue            = Queue()
         self.channel_recycle_times = {}
-        self.channel_broken_times = []
-        self.tolerance = app.config['FLASK_PIKA_TOLERANCE'][0]
-        self.tolerance_interval = app.config['FLASK_PIKA_TOLERANCE'][1]
+        self.channel_broken_times  = []
+        self.tolerance             = app.config['FLASK_PIKA_TOLERANCE'][0]
+        self.tolerance_interval    = app.config['FLASK_PIKA_TOLERANCE'][1]
+        self.failed_over           = False
 
         # fix create credentials if needed
         if 'credentials' not in pika_params:
-            pika_params = self.__create_creds(pika_params)
+            pika_params          = self.__create_creds(pika_params)
         if 'credentials' not in pika_failover_params:
             pika_failover_params = self.__create_creds(pika_failover_params)
 

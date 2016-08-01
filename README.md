@@ -14,20 +14,32 @@ Add the Flask Pika Params to your app config and then initialize the Flask Pika 
         'port': 5672,            #amqp server port
         'virtual_host':'vhost'   #amqp vhost
     }
+    # without the Failover Params failover will be disabled.
+    FLASK_PIKA_FAILOVER_PARAMS = {
+        'host': 'ampq host',     # amqp.server.com
+        'username': 'username',  # convenience param for username
+        'password': 'password',  # convenience param for password
+        'port': 5672,            # amqp server port
+        'virtual_host': '/'      # amqp vhost
+    }
 
     # optional pooling params
     FLASK_PIKA_POOL_PARAMS = {
         'pool_size': 8,
         'pool_recycle': 600
     }
+    
+    # Tuple of how many fails out of how many seconds
+    FLASK_PIKA_TOLERANCE = (5, 60)
+    FLASK_PIKA_FAILBACK = 10 # minutes 
 
 
     ##app.py
     from flask import Flask
-	from flask_pika import Pika as FPika
+	from flask_pika import Fpika
 
     app = Flask(__name__)
-	fpika = FPika(app)
+	fpika = Fpika(app)
 
     # Alternatively, Flask's application factory pattern is supported:
     
