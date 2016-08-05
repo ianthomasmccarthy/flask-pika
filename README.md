@@ -31,7 +31,8 @@ Add the Flask Pika Params to your app config and then initialize the Flask Pika 
     
     # Tuple of how many fails out of how many seconds
     FLASK_PIKA_TOLERANCE = (5, 60)
-    FLASK_PIKA_FAILBACK = 10 # minutes 
+    FLASK_PIKA_FAILBACK = 100 # messages
+    
 
 
     ##app.py

@@ -15,17 +15,10 @@ class TestFlaskPika(unittest.TestCase):
                 'port': 5672,
                 'virtual_host': '/'}
 
-    # def params(self):
-    #     return {'host': 'testing.host.com',
-    #             'username': 'ianthomasmccarthy',
-    #             'password': 'ianthomasmccarthy',
-    #             'port': 5672,
-    #             'virtual_host': '/'}
-
     def params(self):
-        return {'host':     'graphrmq301p.prod.ch3.s.com',
-                'username': 'monitoring',
-                'password': 'monitoring',
+        return {'host': 'testing.host.com',
+                'username': 'ianthomasmccarthy',
+                'password': 'ianthomasmccarthy',
                 'port': 5672,
                 'virtual_host': '/'}
 
@@ -58,11 +51,3 @@ class TestFlaskPika(unittest.TestCase):
         self.fpika.tolerance_interval = 60
         self.assertTrue(self.fpika.check_tolerance())
         self.assertEqual(len(self.fpika.channel_broken_times), self.fpika.tolerance)
-
-    def test_check_alive(self):
-        self.fpika.orig_params = self.params()
-        api = "http://{host}:15672/api/".format(host=self.fpika.orig_params['host'])
-        self.assertTrue(self.fpika.check_alive(api))
-        self.fpika.failback = 1
-        self.fpika.failed_over = True        
-        # self.assertTrue(self.fpika.check_rabbit())
