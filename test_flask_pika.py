@@ -15,19 +15,12 @@ class TestFlaskPika(unittest.TestCase):
                 'port': 5672,
                 'virtual_host': '/'}
 
-    # def params(self):
-    #     return {'host': 'testing.host.com',
-    #             'username': 'ianthomasmccarthy',
-    #             'password': 'ianthomasmccarthy',
-    #             'port': 5672,
-    #             'virtual_host': '/'}
-
-    def params(self):
-        return {'host':     'graphrmq301p.prod.ch3.s.com',
-                'username': 'monitoring',
-                'password': 'monitoring',
-                'port': 5672,
-                'virtual_host': '/'}
+     def params(self):
+         return {'host': 'testing.host.com',
+                 'username': 'ianthomasmccarthy',
+                 'password': 'ianthomasmccarthy',
+                 'port': 5672,
+                 'virtual_host': '/'}
 
     def setUp(self):
         self.fpika = Fpika(Logger=MockLogger())
